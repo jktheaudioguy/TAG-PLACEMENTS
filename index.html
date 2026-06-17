@@ -544,7 +544,9 @@ async function deleteOpp() {
 function draftWA() {
   var o = opps.find(function(x){return String(x.id)===String(activeOppId);});
   if (!o) return;
-  var msg = '🎬 *Placement Opportunity | '+o.company+'*\n\nHi everyone,\n\nWe have a new opportunity from *'+o.company+'* for the role of *'+o.role+'*.\n\n📋 *Role:* '+o.role+'\n🏢 *Company:* '+o.company+'\n\n*Requirements:*\n'+(o.desc||'Details shared on request.')+'\n\nInterested students, please reply with:\n✅ Your full name\n✅ Batch / year of passing\n✅ A brief note on relevant experience\n\n*Deadline to respond: [ADD DATE]*\n\nAll the best! 🎙️\n— JK | TAG Institute';
+  var deadline = new Date(); deadline.setDate(deadline.getDate()+7);
+  var dlStr = deadline.toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'});
+  var msg = '*Placement Opportunity | TAG Institute*\n\nHi everyone,\n\nWe have a new opening for the role of *'+o.role+'*.\n\n*Requirements:*\n'+(o.desc||'Details shared on request.')+'\n\nInterested students, please DM me with your CV as a reply to this message.\n\n*Deadline to respond: '+dlStr+'*\n\nAll the best!\n— JK | TAG Institute';
   var sec = document.getElementById('wa-section');
   sec.innerHTML = '<div class="section-head" style="margin-top:1.25rem;">WhatsApp draft</div><div class="wa-draft" id="wa-text">'+esc(msg)+'</div><button class="wa-copy-btn" onclick="copyWA()">Copy message</button>';
   sec.scrollIntoView({ behavior:'smooth', block:'nearest' });
