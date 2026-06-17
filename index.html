@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>TAG Placement Tracker</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f5f4f0; --surface: #ffffff; --surface2: #f0efe9;
+    --border: #e2e0d8; --border2: #cccac0;
+    --text: #1a1916; --text2: #6b6960; --text3: #9e9d96;
+    --font: system-ui, -apple-system, sans-serif; --radius: 8px; --radius-lg: 12px;
+  }
+  body { font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100vh; font-size: 14px; line-height: 1.5; }
+  .topbar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 2rem; display: flex; align-items: center; justify-content: space-between; height: 56px; position: sticky; top: 0; z-index: 50; }
+  .topbar-brand { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 600; letter-spacing: -0.02em; }
+  .topbar-brand span { color: var(--text2); font-weight: 400; font-size: 13px; }
+  .logo-pill { background: var(--text); color: #fff; border-radius: 6px; padding: 4px 8px; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; }
+  .sync-status { font-size: 12px; color: var(--text3); display: flex; align-items: center; gap: 6px; }
+  .sync-dot { width: 7px; height: 7px; border-radius: 50%; background: #9e9d96; }
+  .sync-dot.ok { background: #3a9e5a; }
+  .sync-dot.syncing { background: #e8a020; animation: pulse 1s infinite; }
+  .sync-dot.err { background: #c0392b; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+  .layout { display: flex; height: calc(100vh - 56px); overflow: hidden; }
+  .sidebar { width: 240px; flex-shrink: 0; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow-y: auto; }
+  .main { flex: 1; overflow-y: auto; padding: 1.5rem 2rem; }
+  .sidebar-section { padding: 1rem; border-bottom: 1px solid var(--border); }
+  .sidebar-label { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; color: var(--text3); text-transform: uppercase; margin-bottom: 8px; }
+  .stat-item { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; font-size: 13px; color: var(--text2); }
+  .stat-num { font-weight: 600; font-size: 15px; color: var(--text); }
+  .nav-item { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: var(--radius); font-size: 13px; color: var(--text2); cursor: pointer; margin-bottom: 2px; }
+  .nav-item:hover { background: var(--surface2); color: var(--text); }
+  .nav-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .sidebar-bottom { margin-top: auto; padding: 1rem; display: flex; flex-direction: column; gap: 8px; }
+  .btn-new { width: 100%; background: var(--text); color: #fff; border: none; border-radius: var(--radius); padding: 9px 16px; font-size: 13px; font-weight: 500; cursor: pointer; }
+  .btn-new:hover { opacity: 0.85; }
+  .btn-export { width: 100%; background: transparent; color: var(--text2); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 16px; font-size: 13px; cursor: pointer; }
+  .btn-export:hover { background: var(--surface2); }
+  .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; }
+  .page-title { font-size: 20px; font-weight: 600; letter-spacing: -0.02em; }
+  .page-sub { font-size: 13px; color: var(--text2); margin-top: 2px; }
+  .search-bar { position: relative; margin-bottom: 1.25rem; }
+  .search-bar input { width: 100%; padding: 8px 12px 8px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); font-size: 13px; color: var(--text); outline: none; }
+  .search-bar input:focus { border-color: var(--border2); }
+  .board { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; align-items: start; }
+  .col { border-radius: var(--radius-lg); padding: 10px; min-height: 200px; }
+  .col-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; padding: 0 2px; }
+  .col-name { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; }
+  .col-badge { font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 99px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; margin-bottom: 8px; cursor: pointer; transition: border-color 0.15s, box-shadow 0.15s; }
+  .card:hover { border-color: var(--border2); box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+  .card-company { font-size: 13px; font-weight: 600; margin-bottom: 2px; }
+  .card-role { font-size: 12px; color: var(--text2); margin-bottom: 8px; line-height: 1.4; }
+  .card-footer { display: flex; justify-content: space-between; align-items: center; }
+  .card-date { font-size: 11px; color: var(--text3); }
+  .pill { font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 99px; }
+  .btn { font-size: 13px; font-weight: 500; padding: 7px 14px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; white-space: nowrap; }
+  .btn:hover { background: var(--surface2); }
+  .btn-dark { background: var(--text); color: #fff; border-color: var(--text); }
+  .btn-dark:hover { opacity: 0.85; background: var(--text); }
+  .btn-danger { background: #7a1f1f; color: #fff; border-color: #7a1f1f; }
+  .overlay { display: none; position: fixed; inset: 0; background: rgba(10,10,8,0.45); z-index: 200; align-items: center; justify-content: center; padding: 1rem; }
+  .overlay.open { display: flex; }
+  .modal { background: var(--surface); border-radius: var(--radius-lg); width: 560px; max-width: 100%; max-height: 90vh; overflow-y: auto; box-shadow: 0 8px 40px rgba(0,0,0,0.18); }
+  .modal-head { padding: 1.25rem 1.5rem 1rem; border-bottom: 1px solid var(--border); display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+  .modal-title { font-size: 16px; font-weight: 600; }
+  .modal-sub { font-size: 13px; color: var(--text2); margin-top: 2px; }
+  .modal-body { padding: 1.25rem 1.5rem; }
+  .modal-foot { padding: 1rem 1.5rem; border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: flex-end; }
+  .close-btn { background: none; border: none; cursor: pointer; color: var(--text2); font-size: 20px; line-height: 1; padding: 2px; }
+  .close-btn:hover { color: var(--text); }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .form-group { display: flex; flex-direction: column; gap: 5px; }
+  .form-group.full { grid-column: 1 / -1; }
+  .form-label { font-size: 12px; font-weight: 500; color: var(--text2); }
+  .form-group input, .form-group select, .form-group textarea { font-size: 13px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); outline: none; font-family: var(--font); }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: var(--border2); }
+  .form-group textarea { resize: vertical; min-height: 72px; }
+  .section-head { font-size: 11px; font-weight: 600; color: var(--text3); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 10px; margin-top: 1.25rem; padding-top: 1.25rem; border-top: 1px solid var(--border); }
+  .student-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .student-row:last-child { border-bottom: none; }
+  .s-name { font-size: 13px; font-weight: 500; }
+  .s-batch { font-size: 11px; color: var(--text3); margin-top: 1px; }
+  .status-btn { font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 99px; cursor: pointer; border: none; }
+  .status-btn:hover { opacity: 0.8; }
+  .st-Applied { background: #e8f0fb; color: #1a3d7c; }
+  .st-Interview { background: #fef3dc; color: #7a4e00; }
+  .st-Selected { background: #e4f4e8; color: #1a5c2a; }
+  .st-Rejected { background: #fce8e8; color: #7a1f1f; }
+  .st-Joined { background: #e0f5f0; color: #0f5244; }
+  .add-student-row { display: flex; gap: 8px; margin-top: 10px; }
+  .add-student-row input { flex: 1; font-size: 13px; padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); outline: none; font-family: var(--font); }
+  .stage-select { font-size: 12px; padding: 4px 8px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); outline: none; font-family: var(--font); cursor: pointer; }
+  .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+  .d-label { font-size: 11px; color: var(--text3); font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 3px; }
+  .d-val { font-size: 13px; color: var(--text); }
+  .wa-draft { background: #e9fce4; border: 1px solid #b2e8a2; border-radius: var(--radius-lg); padding: 1rem 1.25rem; margin-top: 10px; font-size: 13px; line-height: 1.7; white-space: pre-wrap; color: #1a3d10; font-family: var(--font); }
+  .wa-copy-btn { margin-top: 8px; font-size: 12px; padding: 5px 12px; border-radius: var(--radius); border: 1px solid #b2e8a2; background: #fff; color: #1a3d10; cursor: pointer; }
+  .wa-copy-btn:hover { background: #e9fce4; }
+  .empty { text-align: center; padding: 2rem 1rem; color: var(--text3); font-size: 13px; }
+  .toast { position: fixed; bottom: 1.5rem; right: 1.5rem; background: var(--text); color: #fff; font-size: 13px; padding: 10px 16px; border-radius: var(--radius); z-index: 999; opacity: 0; transition: opacity 0.2s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+  .loading { text-align: center; padding: 3rem; color: var(--text3); font-size: 14px; }
+  .spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--text2); border-radius: 50%; animation: spin 0.7s linear infinite; margin-right: 8px; vertical-align: -4px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div id="lock-screen" style="position:fixed;inset:0;background:#f5f4f0;z-index:9999;display:flex;align-items:center;justify-content:center;">
+<div style="background:#fff;border:1px solid #e2e0d8;border-radius:12px;padding:2.5rem 2rem;width:340px;text-align:center;">
+  <div style="background:#1a1916;color:#fff;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;letter-spacing:0.04em;display:inline-block;margin-bottom:1.25rem;">TAG</div>
+  <div style="font-size:18px;font-weight:600;margin-bottom:6px;letter-spacing:-0.02em;">Placement Tracker</div>
+  <div style="font-size:13px;color:#6b6960;margin-bottom:1.5rem;">Enter password to continue</div>
+  <input type="password" id="pw-input" placeholder="Password" onkeydown="if(event.key==='Enter')checkPw()" style="width:100%;padding:9px 12px;border:1px solid #e2e0d8;border-radius:8px;font-size:14px;outline:none;margin-bottom:10px;font-family:system-ui;" />
+  <div id="pw-err" style="font-size:12px;color:#c0392b;min-height:16px;margin-bottom:8px;"></div>
+  <button onclick="checkPw()" style="width:100%;background:#1a1916;color:#fff;border:none;border-radius:8px;padding:10px;font-size:13px;font-weight:500;cursor:pointer;">Unlock</button>
+</div>
+</div>
+
+<div class="topbar">
+  <div class="topbar-brand">
+    <div class="logo-pill">TAG</div>
+    Placement Tracker <span>/ Mumbai</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:16px;">
+    <div class="sync-status"><div class="sync-dot" id="sync-dot"></div><span id="sync-label">Connecting...</span></div>
+    <button class="btn btn-dark" onclick="openNewOpp()">+ New opportunity</button>
+  </div>
+</div>
+
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Overview</div>
+      <div class="stat-item"><span>Total</span><span class="stat-num" id="s-total">—</span></div>
+      <div class="stat-item"><span>Active</span><span class="stat-num" id="s-active">—</span></div>
+      <div class="stat-item"><span>Interviews pending</span><span class="stat-num" id="s-interviews">—</span></div>
+      <div class="stat-item"><span>Students joined</span><span class="stat-num" id="s-joined">—</span></div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Pipeline</div>
+      <div id="stage-nav"></div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Student outcomes</div>
+      <div class="stat-item"><span>Applied</span><span class="stat-num" id="ss-applied">—</span></div>
+      <div class="stat-item"><span>Interviews</span><span class="stat-num" id="ss-interview">—</span></div>
+      <div class="stat-item"><span>Selected</span><span class="stat-num" id="ss-selected">—</span></div>
+      <div class="stat-item"><span>Rejected</span><span class="stat-num" id="ss-rejected">—</span></div>
+      <div class="stat-item"><span>Joined</span><span class="stat-num" id="ss-joined">—</span></div>
+    </div>
+    <div class="sidebar-bottom">
+      <button class="btn-export" onclick="exportCSV()">⬇ Export CSV</button>
+      <button class="btn-export" onclick="loadData()">↺ Refresh</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Placement pipeline</div>
+        <div class="page-sub">Synced with Google Sheets — access from any device</div>
+      </div>
+    </div>
+    <div class="search-bar">
+      <input type="text" id="searchInput" placeholder="Search by company or role..." oninput="renderBoard()" />
+    </div>
+    <div id="board"><div class="loading"><span class="spinner"></span>Loading from Google Sheets...</div></div>
+  </main>
+</div>
+
+<!-- NEW OPP MODAL -->
+<div class="overlay" id="newOppModal">
+  <div class="modal">
+    <div class="modal-head">
+      <div><div class="modal-title">New placement opportunity</div><div class="modal-sub">Enter the details received from the employer</div></div>
+      <button class="close-btn" onclick="closeModal('newOppModal')">&#10005;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group"><label class="form-label">Company / studio name</label><input type="text" id="f-company" placeholder="e.g. YRF Studios" /></div>
+        <div class="form-group"><label class="form-label">Role</label><input type="text" id="f-role" placeholder="e.g. Assistant Sound Engineer" /></div>
+        <div class="form-group"><label class="form-label">Contact person</label><input type="text" id="f-contact" placeholder="Name" /></div>
+        <div class="form-group"><label class="form-label">Contact number</label><input type="text" id="f-phone" placeholder="98xxxxxxxx" /></div>
+        <div class="form-group"><label class="form-label">Date received</label><input type="date" id="f-date" /></div>
+        <div class="form-group"><label class="form-label">Stage</label>
+          <select id="f-stage">
+            <option value="New">New</option>
+            <option value="Shared to groups">Shared to groups</option>
+            <option value="Applicants collected">Applicants collected</option>
+            <option value="Interviews">Interviews</option>
+            <option value="Closed">Closed</option>
+          </select>
+        </div>
+        <div class="form-group full"><label class="form-label">Job description / requirements</label><textarea id="f-desc" placeholder="Paste the job requirement here..."></textarea></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal('newOppModal')">Cancel</button>
+      <button class="btn btn-dark" id="save-opp-btn" onclick="saveOpp()">Save opportunity</button>
+    </div>
+  </div>
+</div>
+
+<!-- DETAIL MODAL -->
+<div class="overlay" id="detailModal">
+  <div class="modal">
+    <div class="modal-head">
+      <div><div class="modal-title" id="d-title">—</div><div class="modal-sub" id="d-sub">—</div></div>
+      <button class="close-btn" onclick="closeModal('detailModal')">&#10005;</button>
+    </div>
+    <div class="modal-body" id="d-body"></div>
+    <div class="modal-foot">
+      <button class="btn btn-danger" onclick="deleteOpp()">Delete</button>
+      <button class="btn" onclick="closeModal('detailModal')">Close</button>
+      <button class="btn btn-dark" onclick="draftWA()">Draft WhatsApp message</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = 'https://script.google.com/macros/s/AKfycbzzn8eTAL3Ynmdj4Zzx2R-xYn6s0g8ZwiVI4Emv-2Scm5MFH7frxjIwchKrqxQ3rDi83w/exec';
+
+const STAGES = ['New','Shared to groups','Applicants collected','Interviews','Closed'];
+const STAGE_STYLE = {
+  'New':                  { bg:'#f0efe9', text:'#6b6960', badge:'#dddbd0', badgeText:'#444' },
+  'Shared to groups':     { bg:'#e8f0fb', text:'#1a3d7c', badge:'#c8d8f5', badgeText:'#1a3d7c' },
+  'Applicants collected': { bg:'#fef3dc', text:'#7a4e00', badge:'#fad98a', badgeText:'#7a4e00' },
+  'Interviews':           { bg:'#eeecfc', text:'#3d2f9e', badge:'#d4d0f5', badgeText:'#3d2f9e' },
+  'Closed':               { bg:'#e0f5f0', text:'#0f5244', badge:'#9fe0cc', badgeText:'#0f5244' }
+};
+const STATUS_CYCLE = ['Applied','Interview scheduled','Selected','Rejected','Joined'];
+const STATUS_KEY = { 'Applied':'Applied','Interview scheduled':'Interview','Selected':'Selected','Rejected':'Rejected','Joined':'Joined' };
+
+let opps = [];
+let activeOppId = null;
+
+function setSyncStatus(state, label) {
+  var dot = document.getElementById('sync-dot');
+  var lbl = document.getElementById('sync-label');
+  dot.className = 'sync-dot ' + (state === 'ok' ? 'ok' : state === 'syncing' ? 'syncing' : state === 'err' ? 'err' : '');
+  lbl.textContent = label;
+}
+
+async function api(body) {
+  setSyncStatus('syncing', 'Syncing...');
+  try {
+    var res = await fetch(API, { method: 'POST', body: JSON.stringify(body) });
+    var json = await res.json();
+    if (!json.ok) throw new Error(json.error || 'API error');
+    setSyncStatus('ok', 'Synced');
+    return json.data;
+  } catch (err) {
+    setSyncStatus('err', 'Sync error');
+    toast('Error: ' + err.message);
+    throw err;
+  }
+}
+
+async function loadData() {
+  setSyncStatus('syncing', 'Loading...');
+  try {
+    var data = await api({ action: 'getAll' });
+    opps = data.opps || [];
+    renderBoard();
+    updateStats();
+    setSyncStatus('ok', 'Synced with Sheets');
+  } catch(e) {}
+}
+
+async function initAndLoad() {
+  setSyncStatus('syncing', 'Initializing...');
+  try {
+    await api({ action: 'init' });
+    await loadData();
+  } catch(e) {}
+}
+
+function updateStats() {
+  var allStudents = opps.reduce(function(a,o){ return a.concat(o.students||[]); }, []);
+  document.getElementById('s-total').textContent = opps.length;
+  document.getElementById('s-active').textContent = opps.filter(function(o){return o.stage!=='Closed';}).length;
+  document.getElementById('s-interviews').textContent = allStudents.filter(function(s){return s.status==='Interview scheduled';}).length;
+  document.getElementById('s-joined').textContent = allStudents.filter(function(s){return s.status==='Joined';}).length;
+  document.getElementById('ss-applied').textContent = allStudents.filter(function(s){return s.status==='Applied';}).length;
+  document.getElementById('ss-interview').textContent = allStudents.filter(function(s){return s.status==='Interview scheduled';}).length;
+  document.getElementById('ss-selected').textContent = allStudents.filter(function(s){return s.status==='Selected';}).length;
+  document.getElementById('ss-rejected').textContent = allStudents.filter(function(s){return s.status==='Rejected';}).length;
+  document.getElementById('ss-joined').textContent = allStudents.filter(function(s){return s.status==='Joined';}).length;
+
+  var nav = document.getElementById('stage-nav');
+  nav.innerHTML = STAGES.map(function(s) {
+    var c = opps.filter(function(o){return o.stage===s;}).length;
+    var st = STAGE_STYLE[s];
+    return '<div class="nav-item"><span class="nav-dot" style="background:'+st.badge+';"></span><span style="flex:1;">'+s+'</span><span style="font-size:12px;font-weight:600;color:'+st.text+';">'+c+'</span></div>';
+  }).join('');
+}
+
+function renderBoard() {
+  var q = (document.getElementById('searchInput').value||'').toLowerCase();
+  var board = document.getElementById('board');
+  board.style.display = 'grid';
+  board.innerHTML = STAGES.map(function(stage) {
+    var cards = opps.filter(function(o){ return o.stage===stage && (o.company.toLowerCase().includes(q)||o.role.toLowerCase().includes(q)); });
+    var st = STAGE_STYLE[stage];
+    return '<div class="col" style="background:'+st.bg+'">'+
+      '<div class="col-header">'+
+        '<span class="col-name" style="color:'+st.text+'">'+stage.toUpperCase()+'</span>'+
+        '<span class="col-badge" style="background:'+st.badge+';color:'+st.badgeText+'">'+cards.length+'</span>'+
+      '</div>'+
+      (cards.length===0 ? '<div class="empty">No opportunities</div>' : '')+
+      cards.map(function(o){
+        var studs = (o.students||[]).length;
+        return '<div class="card" onclick="openDetail(\''+o.id+'\')">'+
+          '<div class="card-company">'+esc(o.company)+'</div>'+
+          '<div class="card-role">'+esc(o.role)+'</div>'+
+          '<div class="card-footer">'+
+            '<span class="card-date">'+fmtDate(o.date)+'</span>'+
+            (studs>0?'<span class="pill" style="background:#e8f0fb;color:#1a3d7c;">'+studs+' student'+(studs>1?'s':'')+'</span>':'')+
+          '</div></div>';
+      }).join('')+
+    '</div>';
+  }).join('');
+}
+
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function fmtDate(d) { if(!d) return ''; var dt=new Date(d); return isNaN(dt)?d:dt.toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}); }
+
+function openNewOpp() {
+  ['f-company','f-role','f-contact','f-phone','f-desc'].forEach(function(id){ document.getElementById(id).value=''; });
+  document.getElementById('f-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('f-stage').value = 'New';
+  document.getElementById('newOppModal').classList.add('open');
+}
+
+async function saveOpp() {
+  var company = document.getElementById('f-company').value.trim();
+  var role = document.getElementById('f-role').value.trim();
+  if (!company||!role) { alert('Please enter company name and role.'); return; }
+  var btn = document.getElementById('save-opp-btn');
+  btn.textContent = 'Saving...'; btn.disabled = true;
+  var opp = { id: Date.now(), company: company, role: role, contact: document.getElementById('f-contact').value.trim(), phone: document.getElementById('f-phone').value.trim(), desc: document.getElementById('f-desc').value.trim(), date: document.getElementById('f-date').value, stage: document.getElementById('f-stage').value };
+  try {
+    await api({ action: 'saveOpp', opp: opp });
+    opp.students = [];
+    opps.unshift(opp);
+    renderBoard(); updateStats();
+    closeModal('newOppModal');
+    toast('Opportunity saved to Sheets');
+  } catch(e) {}
+  btn.textContent = 'Save opportunity'; btn.disabled = false;
+}
+
+function openDetail(id) {
+  var o = opps.find(function(x){return String(x.id)===String(id);});
+  if (!o) return;
+  activeOppId = String(id);
+  document.getElementById('d-title').textContent = o.company + ' — ' + o.role;
+  document.getElementById('d-sub').textContent = 'Received ' + fmtDate(o.date);
+  document.getElementById('d-body').innerHTML =
+    '<div class="detail-grid">'+
+      '<div><div class="d-label">Contact</div><div class="d-val">'+esc(o.contact||'—')+'</div></div>'+
+      '<div><div class="d-label">Phone</div><div class="d-val">'+esc(o.phone||'—')+'</div></div>'+
+    '</div>'+
+    '<div style="margin-bottom:12px;"><div class="d-label">Requirements</div><div class="d-val" style="margin-top:3px;line-height:1.6;">'+esc(o.desc||'—')+'</div></div>'+
+    '<div style="margin-bottom:12px;"><div class="d-label" style="margin-bottom:4px;">Stage</div>'+
+      '<select class="stage-select" onchange="changeStage(\''+id+'\',this.value)">'+
+        STAGES.map(function(s){return '<option value="'+s+'"'+(s===o.stage?' selected':'')+'>'+s+'</option>';}).join('')+
+      '</select>'+
+    '</div>'+
+    '<div class="section-head">Students ('+(o.students||[]).length+')</div>'+
+    '<div id="student-list">'+renderStudents(o)+'</div>'+
+    '<div class="add-student-row" style="margin-top:10px;">'+
+      '<input type="text" id="ns-name" placeholder="Student name" />'+
+      '<input type="text" id="ns-batch" placeholder="Batch / Alumni year" style="max-width:160px;" />'+
+      '<button class="btn" onclick="addStudent(\''+id+'\')">Add</button>'+
+    '</div>'+
+    '<div id="wa-section"></div>';
+  document.getElementById('detailModal').classList.add('open');
+}
+
+function renderStudents(o) {
+  var students = o.students || [];
+  if (!students.length) return '<div style="font-size:13px;color:var(--text3);padding:8px 0;">No students added yet.</div>';
+  return students.map(function(s,i){
+    var key = STATUS_KEY[s.status] || 'Applied';
+    return '<div class="student-row">'+
+      '<div><div class="s-name">'+esc(s.name)+'</div><div class="s-batch">'+esc(s.batch)+'</div></div>'+
+      '<button class="status-btn st-'+key+'" onclick="cycleStatus(\''+o.id+'\','+i+')" title="Tap to update">'+esc(s.status)+'</button>'+
+    '</div>';
+  }).join('');
+}
+
+async function cycleStatus(oppId, idx) {
+  var o = opps.find(function(x){return String(x.id)===String(oppId);});
+  if (!o) return;
+  var cur = STATUS_CYCLE.indexOf(o.students[idx].status);
+  o.students[idx].status = STATUS_CYCLE[(cur+1)%STATUS_CYCLE.length];
+  document.getElementById('student-list').innerHTML = renderStudents(o);
+  updateStats(); renderBoard();
+  try { await api({ action: 'updateStudent', student: o.students[idx] }); } catch(e) {}
+}
+
+async function changeStage(id, stage) {
+  var o = opps.find(function(x){return String(x.id)===String(id);});
+  if (!o) return;
+  o.stage = stage;
+  renderBoard(); updateStats();
+  try { await api({ action: 'updateOpp', opp: o }); toast('Stage updated'); } catch(e) {}
+}
+
+async function addStudent(oppId) {
+  var name = document.getElementById('ns-name').value.trim();
+  var batch = document.getElementById('ns-batch').value.trim();
+  if (!name) { alert('Please enter student name.'); return; }
+  var o = opps.find(function(x){return String(x.id)===String(oppId);});
+  var student = { id: Date.now(), oppId: oppId, name: name, batch: batch||'Unknown batch', status: 'Applied' };
+  o.students = o.students || [];
+  o.students.push(student);
+  document.getElementById('student-list').innerHTML = renderStudents(o);
+  document.getElementById('ns-name').value = '';
+  document.getElementById('ns-batch').value = '';
+  updateStats(); renderBoard();
+  try { await api({ action: 'saveStudent', student: student }); toast('Student saved to Sheets'); } catch(e) {}
+}
+
+async function deleteOpp() {
+  if (!confirm('Delete this opportunity and all its students? This cannot be undone.')) return;
+  try {
+    await api({ action: 'deleteOpp', id: activeOppId });
+    opps = opps.filter(function(o){return String(o.id)!==String(activeOppId);});
+    closeModal('detailModal'); renderBoard(); updateStats(); toast('Deleted');
+  } catch(e) {}
+}
+
+function draftWA() {
+  var o = opps.find(function(x){return String(x.id)===String(activeOppId);});
+  if (!o) return;
+  var msg = '🎬 *Placement Opportunity | '+o.company+'*\n\nHi everyone,\n\nWe have a new opportunity from *'+o.company+'* for the role of *'+o.role+'*.\n\n📋 *Role:* '+o.role+'\n🏢 *Company:* '+o.company+'\n\n*Requirements:*\n'+(o.desc||'Details shared on request.')+'\n\nInterested students, please reply with:\n✅ Your full name\n✅ Batch / year of passing\n✅ A brief note on relevant experience\n\n*Deadline to respond: [ADD DATE]*\n\nAll the best! 🎙️\n— JK | TAG Institute';
+  var sec = document.getElementById('wa-section');
+  sec.innerHTML = '<div class="section-head" style="margin-top:1.25rem;">WhatsApp draft</div><div class="wa-draft" id="wa-text">'+esc(msg)+'</div><button class="wa-copy-btn" onclick="copyWA()">Copy message</button>';
+  sec.scrollIntoView({ behavior:'smooth', block:'nearest' });
+}
+
+function copyWA() {
+  var text = document.getElementById('wa-text').textContent;
+  navigator.clipboard.writeText(text).then(function(){ toast('Copied to clipboard!'); });
+}
+
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+function exportCSV() {
+  var rows = [['Company','Role','Contact','Phone','Date','Stage','Student Name','Batch','Status']];
+  opps.forEach(function(o){
+    if (!(o.students||[]).length) { rows.push([o.company,o.role,o.contact,o.phone,o.date,o.stage,'','','']); }
+    else { o.students.forEach(function(s){ rows.push([o.company,o.role,o.contact,o.phone,o.date,o.stage,s.name,s.batch,s.status]); }); }
+  });
+  var csv = rows.map(function(r){return r.map(function(c){return '"'+String(c||'').replace(/"/g,'""')+'"';}).join(',');}).join('\n');
+  var a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+  a.download = 'TAG_Placements_'+new Date().toISOString().split('T')[0]+'.csv';
+  a.click(); toast('CSV exported');
+}
+
+function toast(msg) {
+  var t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(function(){ t.classList.remove('show'); }, 2500);
+}
+
+document.querySelectorAll('.overlay').forEach(function(el){
+  el.addEventListener('click', function(e){ if(e.target===el) el.classList.remove('open'); });
+});
+
+initAndLoad();
+
+function checkPw() {
+  var val = document.getElementById("pw-input").value;
+  if (val === "haha123") {
+    document.getElementById("lock-screen").style.display = "none";
+    sessionStorage.setItem("tag_auth","1");
+  } else {
+    document.getElementById("pw-err").textContent = "Incorrect password. Try again.";
+    document.getElementById("pw-input").value = "";
+    document.getElementById("pw-input").focus();
+  }
+}
+if (sessionStorage.getItem("tag_auth")==="1") {
+  document.getElementById("lock-screen").style.display = "none";
+}
+</script>
+</body>
+</html>
